@@ -3,11 +3,6 @@ use std::io::Read;
 
 extern crate sdl2;
 
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use std::time::Duration;
-
 use super::display;
 
 pub struct Memory {
@@ -36,11 +31,6 @@ impl Memory {
             v: [0; 16],
         }
     }
-
-    pub fn load_rom(&mut self, filename: &String) {
-        let mut f = File::open(&filename).expect("no file found");
-        f.read(&mut self.ram[0x200..]).expect("error reading file");
-    }
 }
 
 pub struct Emulator<'a> {
@@ -63,14 +53,21 @@ impl Emulator<'_> {
         Emulator { mem, display }
     }
 
+    pub fn load_rom(&mut self, filename: &String) {
+        let mut f = File::open(&filename).expect("no file found");
+        f.read(&mut self.mem.ram[0x200..])
+            .expect("error reading file");
+    }
+
     pub fn emulate_cycle(&mut self) {
         let mut opcode: u16 = self.mem.ram[self.mem.pc] as u16;
 
         opcode = opcode << 8 | self.mem.ram[self.mem.pc + 1] as u16;
-        println!(
-            "PC: {:02X?}, Current opcode: {:02X?}, i : {:02X?}",
-            self.mem.pc, opcode, self.mem.i
-        );
+        // println!(
+        //     "PC: {:02X?}, Current opcode: {:02X?}, i : {:02X?}",
+        //     self.mem.pc, opcode, self.mem.i
+        // );
+
         self.mem.pc += 2;
 
         if opcode == 0x00E0 {
@@ -82,12 +79,12 @@ impl Emulator<'_> {
             0x1000 => (self.mem.pc = (opcode & 0x0FFF) as usize),
             0x6000 => {
                 let index = (opcode & 0x0F00) >> 8;
-                println!("v[{}] = {}", index, (opcode & 0x00FF));
+                //println!("v[{}] = {}", index, (opcode & 0x00FF));
                 self.mem.v[index as usize] = (opcode & 0x00FF) as u8;
             }
             0x7000 => {
                 let index = (opcode & 0x0F00) >> 8;
-                println!("v[{}] += {}", index, (opcode & 0x00FF));
+                //println!("v[{}] += {}", index, (opcode & 0x00FF));
                 self.mem.v[index as usize] += (opcode & 0x00FF) as u8;
             }
             0xA000 => {

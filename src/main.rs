@@ -30,7 +30,7 @@ fn main() {
     };
 
     let mut emulator = emulator::Emulator::new(&mut canvas);
-    emulator.mem.load_rom(&String::from("Roms/IBMLOGO.ch8"));
+    emulator.load_rom(&String::from("Roms/IBMLOGO.ch8"));
 
     emulator.display.clear_screen();
 
@@ -56,6 +56,6 @@ fn main() {
         emulator.emulate_cycle();
         emulator.draw();
 
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 700));
     }
 }
