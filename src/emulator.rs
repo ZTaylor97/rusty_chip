@@ -36,23 +36,23 @@ impl Memory {
             v: [0; 16],
         }
     }
+
     pub fn load_rom(&mut self, filename: &String) {
         let mut f = File::open(&filename).expect("no file found");
         f.read(&mut self.ram[0x200..]).expect("error reading file");
     }
 }
 
-pub struct Emulator {
+pub struct Emulator<'a> {
     pub mem: Memory,
-    pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
-    pub display: display::Display,
+    pub display: display::Display<'a>,
 }
 
-impl Emulator {
-    pub fn new(canvas: sdl2::render::Canvas<sdl2::video::Window>) -> Emulator {
+impl Emulator<'_> {
+    pub fn new(canvas: &mut sdl2::render::Canvas<sdl2::video::Window>) -> Emulator {
         let mem = Memory::init();
 
-        let mut display = display::Display::new();
+        let mut display = display::Display::new(canvas);
         display.init_cells(
             16,
             16,
@@ -60,11 +60,7 @@ impl Emulator {
             sdl2::pixels::Color::BLACK,
         );
 
-        Emulator {
-            mem,
-            canvas,
-            display,
-        }
+        Emulator { mem, display }
     }
 
     pub fn emulate_cycle(&mut self) {
@@ -78,8 +74,7 @@ impl Emulator {
         self.mem.pc += 2;
 
         if opcode == 0x00E0 {
-            self.canvas.set_draw_color(Color::RGB(0, 0, 0));
-            self.canvas.clear();
+            self.display.clear_screen();
             return;
         }
 
@@ -134,5 +129,13 @@ impl Emulator {
                 println!("Instruction not implemented!");
             }
         }
+    }
+
+    pub fn draw(&mut self) {
+        for cell in self.display.cells {
+            self.display.draw_rect_to_canvas(&cell);
+        }
+
+        self.display.draw_canvas();
     }
 }

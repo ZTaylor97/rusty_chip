@@ -15,26 +15,24 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem
+    let window = match video_subsystem
         .window("Rusty Chip", 1024, 512)
         .position_centered()
-        .build();
-    let window = match window {
+        .build()
+    {
         Ok(window) => window,
         Err(error) => panic!("Problem initialising the window: {:?}", error),
     };
 
-    let canvas = window.into_canvas().build();
-    let canvas = match canvas {
+    let mut canvas = match window.into_canvas().build() {
         Ok(canvas) => canvas,
         Err(error) => panic!("Problem creating canvas: {:?}", error),
     };
 
-    let mut emulator = emulator::Emulator::new(canvas);
+    let mut emulator = emulator::Emulator::new(&mut canvas);
     emulator.mem.load_rom(&String::from("Roms/IBMLOGO.ch8"));
 
-    emulator.canvas.set_draw_color(Color::RGB(0, 0, 0));
-    emulator.canvas.clear();
+    emulator.display.clear_screen();
 
     // TODO: Refactor into sdl_context etc into a separate module so you can just call something like
     // sdl_context.poll_events or something
@@ -56,26 +54,8 @@ fn main() {
             }
         }
         emulator.emulate_cycle();
+        emulator.draw();
 
-        // The rest of the game loop goes here...
-        // TODO: Refactor this into a draw function
-        for cell in emulator.display.cells {
-            if cell.0 {
-                emulator
-                    .canvas
-                    .set_draw_color(emulator.display.cell_colour_on);
-            } else {
-                emulator
-                    .canvas
-                    .set_draw_color(emulator.display.cell_colour_off);
-            }
-            emulator
-                .canvas
-                .fill_rect(cell.1)
-                .expect("Failed to draw rects");
-        }
-
-        emulator.canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
