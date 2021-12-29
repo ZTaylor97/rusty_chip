@@ -1,0 +1,7 @@
+Features:
+- Save states
+- Drag and drop a game on the window to play
+- User configurable screen sizes, cell sizes, colours etc
+-
+
+Bugfixes:

@@ -2,14 +2,10 @@ extern crate sdl2;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
 use std::time::Duration;
 
 mod display;
 mod emulator;
-
-// TODO: Refactor SDL code into display module and remove canvas from emulator module (canvas should be in display)
-// TODO: Refactor emulator into it's own module
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -30,7 +26,7 @@ fn main() {
     };
 
     let mut emulator = emulator::Emulator::new(&mut canvas);
-    emulator.load_rom(&String::from("Roms/IBMLOGO.ch8"));
+    emulator.load_rom(&String::from("Roms/Breakout.ch8"));
 
     emulator.display.clear_screen();
 

@@ -75,8 +75,21 @@ impl Emulator<'_> {
             return;
         }
 
+        // Return from subroutine
+        if opcode == 0x00EE {
+            self.mem.pc = match self.mem.stack.pop() {
+                Some(x) => (x as usize),
+                None => (panic!("Error: Stack empty!")),
+            };
+            return;
+        }
+
         match opcode & 0xF000 {
             0x1000 => (self.mem.pc = (opcode & 0x0FFF) as usize),
+            0x2000 => {
+                self.mem.stack.push(self.mem.pc as u16);
+                self.mem.pc = (opcode & 0x0FFF) as usize;
+            }
             0x6000 => {
                 let index = (opcode & 0x0F00) >> 8;
                 //println!("v[{}] = {}", index, (opcode & 0x00FF));
@@ -85,7 +98,65 @@ impl Emulator<'_> {
             0x7000 => {
                 let index = (opcode & 0x0F00) >> 8;
                 //println!("v[{}] += {}", index, (opcode & 0x00FF));
-                self.mem.v[index as usize] += (opcode & 0x00FF) as u8;
+                self.mem.v[index as usize] =
+                    u8::wrapping_add(self.mem.v[index as usize], (opcode & 0x00FF) as u8);
+            }
+            0x8000 => {
+                let x = (opcode & 0x0F00) >> 8;
+                let y = (opcode & 0x00F0) >> 4;
+
+                match opcode & 0x000F {
+                    0x0 => {
+                        self.mem.v[usize::from(x)] = self.mem.v[usize::from(y)];
+                    }
+                    0x1 => {
+                        self.mem.v[usize::from(x)] |= self.mem.v[usize::from(y)];
+                    }
+                    0x2 => {
+                        self.mem.v[usize::from(x)] &= self.mem.v[usize::from(y)];
+                    }
+                    0x3 => {
+                        self.mem.v[usize::from(x)] ^= self.mem.v[usize::from(y)];
+                    }
+                    0x4 => {
+                        if (self.mem.v[usize::from(x)] + self.mem.v[usize::from(y)]) > 254 {
+                            self.mem.v[0xF] = 1;
+                        } else {
+                            self.mem.v[0xF] = 0;
+                        }
+
+                        self.mem.v[usize::from(x)] = u8::wrapping_add(
+                            self.mem.v[usize::from(x)],
+                            self.mem.v[usize::from(y)],
+                        );
+                    }
+                    0x5 => {
+                        if self.mem.v[usize::from(x)] > self.mem.v[usize::from(y)] {
+                            self.mem.v[0xF] = 1;
+                        } else {
+                            self.mem.v[0xF] = 0;
+                        }
+                        self.mem.v[usize::from(x)] = u8::wrapping_sub(
+                            self.mem.v[usize::from(x)],
+                            self.mem.v[usize::from(y)],
+                        );
+                    }
+                    0x6 => {
+                        panic!("Warning, Shift not implemented");
+                    }
+                    0x7 => {
+                        if self.mem.v[usize::from(y)] > self.mem.v[usize::from(x)] {
+                            self.mem.v[0xF] = 1;
+                        } else {
+                            self.mem.v[0xF] = 0;
+                        }
+                        self.mem.v[usize::from(x)] = u8::wrapping_sub(
+                            self.mem.v[usize::from(y)],
+                            self.mem.v[usize::from(x)],
+                        );
+                    }
+                    _ => (panic!("Instruction: {} is invalid.", opcode)),
+                }
             }
             0xA000 => {
                 self.mem.i = (opcode - 0xA000) as usize;
