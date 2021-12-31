@@ -1,3 +1,4 @@
+use rand::prelude::*;
 use std::fs::File;
 use std::io::Read;
 
@@ -70,56 +71,97 @@ impl Emulator<'_> {
 
         self.mem.pc += 2;
 
-        if opcode == 0x00E0 {
-            self.display.clear_screen();
-            return;
-        }
-
-        // Return from subroutine
-        if opcode == 0x00EE {
-            self.mem.pc = match self.mem.stack.pop() {
-                Some(x) => (x as usize),
-                None => (panic!("Error: Stack empty!")),
-            };
-            return;
-        }
-
         match opcode & 0xF000 {
+            // contains 2 sub instructions
+            0x0000 => match opcode & 0xFF {
+                // 00E0: Clear screen
+                0xF0 => {
+                    self.display.clear_screen();
+                }
+                // 0NNN: Execute subroutine at NNN
+                0xFF => {
+                    self.mem.pc = match self.mem.stack.pop() {
+                        Some(x) => (x as usize),
+                        None => (panic!("Error: Stack empty!")),
+                    };
+                }
+                _ => (panic!("Instruction: {} is invalid.", opcode)),
+            },
+            // 1NNN: Jump to address NNN
             0x1000 => (self.mem.pc = (opcode & 0x0FFF) as usize),
+            // 2NNN: Call subroutine at NNN
             0x2000 => {
                 self.mem.stack.push(self.mem.pc as u16);
                 self.mem.pc = (opcode & 0x0FFF) as usize;
             }
+            // 3XNN: Skip instruction if V[X] = NN
+            0x3000 => {
+                let x = (opcode & 0x0F00) >> 8;
+                let nn = (opcode & 0x00FF) as u8;
+                if self.mem.v[usize::from(x)] == nn {
+                    self.mem.pc += 2;
+                }
+            }
+            // 4XNN: Skip instruction if V[X] != NN
+            0x4000 => {
+                let x = (opcode & 0x0F00) >> 8;
+                let nn = (opcode & 0x00FF) as u8;
+                if self.mem.v[usize::from(x)] != nn {
+                    self.mem.pc += 2;
+                }
+            }
+            // 5XY0: Skip instruction if V[X] == V[Y]
+            0x5000 => {
+                let x = (opcode & 0x0F00) >> 8;
+                let y = (opcode & 0x00F0) >> 4;
+
+                if self.mem.v[usize::from(x)] == self.mem.v[usize::from(y)] {
+                    self.mem.pc += 2;
+                }
+            }
+            // 6XNN: Set register V[X] to NN
             0x6000 => {
                 let index = (opcode & 0x0F00) >> 8;
                 //println!("v[{}] = {}", index, (opcode & 0x00FF));
                 self.mem.v[index as usize] = (opcode & 0x00FF) as u8;
             }
+            // 7XNN: Add NN to register V[X]
             0x7000 => {
                 let index = (opcode & 0x0F00) >> 8;
                 //println!("v[{}] += {}", index, (opcode & 0x00FF));
                 self.mem.v[index as usize] =
                     u8::wrapping_add(self.mem.v[index as usize], (opcode & 0x00FF) as u8);
             }
+            // Contains 8 sub instructions
             0x8000 => {
                 let x = (opcode & 0x0F00) >> 8;
                 let y = (opcode & 0x00F0) >> 4;
 
                 match opcode & 0x000F {
+                    // 8XY0: Set V[X] to value in V[Y]
                     0x0 => {
                         self.mem.v[usize::from(x)] = self.mem.v[usize::from(y)];
                     }
+                    // 8XY1: Set V[X] to bitwise OR of V[X] and V[Y]
                     0x1 => {
                         self.mem.v[usize::from(x)] |= self.mem.v[usize::from(y)];
                     }
+                    // 8XY2: Set V[X] to bitwise AND of V[X] and V[Y]
                     0x2 => {
                         self.mem.v[usize::from(x)] &= self.mem.v[usize::from(y)];
                     }
+                    // 8XY3: Set V[X] to bitwise XOR of V[X] and V[Y]
                     0x3 => {
                         self.mem.v[usize::from(x)] ^= self.mem.v[usize::from(y)];
                     }
+                    // 8XY4: Set V[X] to the sum of V[X] and V[Y] with the carry flag being set if an overflow occurs and reset if not
                     0x4 => {
-                        if (self.mem.v[usize::from(x)] + self.mem.v[usize::from(y)]) > 254 {
+                        if u8::overflowing_add(
+                            self.mem.v[usize::from(x)],
+                            self.mem.v[usize::from(y)],
+                        )
+                        .1
+                        {
                             self.mem.v[0xF] = 1;
                         } else {
                             self.mem.v[0xF] = 0;
@@ -130,6 +172,7 @@ impl Emulator<'_> {
                             self.mem.v[usize::from(y)],
                         );
                     }
+                    //
                     0x5 => {
                         if self.mem.v[usize::from(x)] > self.mem.v[usize::from(y)] {
                             self.mem.v[0xF] = 1;
@@ -158,8 +201,30 @@ impl Emulator<'_> {
                     _ => (panic!("Instruction: {} is invalid.", opcode)),
                 }
             }
+            // 9XY0: Skip instruction if V[X] does not equal V[Y]
+            0x9000 => {
+                let x = (opcode & 0x0F00) >> 8;
+                let y = (opcode & 0x00F0) >> 4;
+
+                if self.mem.v[usize::from(x)] != self.mem.v[usize::from(y)] {
+                    self.mem.pc += 2;
+                }
+            }
             0xA000 => {
                 self.mem.i = (opcode - 0xA000) as usize;
+            }
+            // BNNN: Jump with offset
+            // TODO: Make configurable to switch between super chip and chip-48 BXNN version and BNNN version
+            0xB000 => {
+                let nnn = opcode & 0x0FFF;
+                self.mem.pc = usize::wrapping_add(usize::from(self.mem.v[0]), usize::from(nnn));
+            }
+            0xC000 => {
+                let x = (opcode & 0x0F00) >> 8;
+                let nn = opcode & 0x00FF;
+                let rand_num: u8 = rand::random();
+
+                self.mem.v[usize::from(x)] = rand_num & (nn as u8);
             }
             0xD000 => {
                 // Extract coordinates and n from opcode
@@ -193,6 +258,8 @@ impl Emulator<'_> {
                     }
                 }
             }
+            0xE000 => {}
+            0xF000 => {}
             _ => {
                 println!("Instruction not implemented!");
             }
